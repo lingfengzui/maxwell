@@ -85,7 +85,8 @@ public class MaxwellMysqlConfig {
 
 	/**
 	 * 返回jdbcOption字符串，用于bootstrap连接MySQL
-	 * @return
+	 * add ZhuHai on 2019-12-31
+	 * @return jdbcOperation字符串
 	 */
 	public String getJDBCOptions() {
 		Map<String, String> map = this.jdbcOptions;
