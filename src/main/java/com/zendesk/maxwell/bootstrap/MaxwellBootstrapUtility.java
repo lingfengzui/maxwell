@@ -1,6 +1,18 @@
 package com.zendesk.maxwell.bootstrap;
 
+import com.zendesk.maxwell.MaxwellConfig;
+import com.zendesk.maxwell.MaxwellContext;
+import com.zendesk.maxwell.producer.MaxwellKafkaProducer;
+import com.zendesk.maxwell.replication.BinlogPosition;
+import com.zendesk.maxwell.replication.Position;
+import com.zendesk.maxwell.schema.Table;
+import com.zendesk.maxwell.schema.columndef.ColumnDef;
+import com.zendesk.maxwell.schema.ddl.DDLMap;
+import com.zendesk.maxwell.schema.ddl.ResolvedTableCreate;
+import com.zendesk.maxwell.schema.ddl.SchemaChange;
+import com.zendesk.maxwell.schema.ddl.TableCreate;
 import com.zendesk.maxwell.util.Logging;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import snaq.db.ConnectionPool;
@@ -11,8 +23,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
 
 public class MaxwellBootstrapUtility {
 	static final Logger LOGGER = LoggerFactory.getLogger(MaxwellBootstrapUtility.class);
@@ -247,13 +260,144 @@ public class MaxwellBootstrapUtility {
 	}
 
 	public static void main(String[] args) {
+		MaxwellBootstrapUtility utility = new MaxwellBootstrapUtility();
 		try {
-			new MaxwellBootstrapUtility().run(args);
+			//配置项
+			String database = "shop";//指定库名
+			String mysqlUrl = "localhost";//mysql地址
+			String mysqlPort = "3306";//mysql端口
+			String mysqlUser = "root";//mysql用户名
+			String mysqlPassword = "root";//mysql密码
+			String kafkaUrl = "localhost:9092";//kafka地址
+			String kafkaTopic = "maxwell_ddl";//ddl数据存放topic,dml数据存放topic在配置文件里配
+			
+			//监控的mysql数据源配置信息,全量同步哪些表,这里只需指定库名
+			String mysqlStr = utility.getParam(6);
+			mysqlStr = String.format(mysqlStr, "database",database,"log_level","debug","table","test");
+			String[] mysqlParam = mysqlStr.split(",");
+			MaxwellBootstrapUtilityConfig config = new MaxwellBootstrapUtilityConfig(mysqlParam);
+			if ( config.log_level != null ) {
+				Logging.setLevel(config.log_level);
+			}
+			ConnectionPool connectionPool = utility.getConnectionPool(config);
+			final Connection connection = connectionPool.getConnection();
+			
+			//mysql配置
+			String newMysqlStr = utility.getParam(8);
+			newMysqlStr = String.format(newMysqlStr, "host",mysqlUrl,"port",mysqlPort,"user",mysqlUser,"password",mysqlPassword);
+			String[] newMysqlParam = newMysqlStr.split(",");
+			
+			//kafka配置
+			Properties kafkaProperties = new Properties();
+			kafkaProperties.put("bootstrap.servers", kafkaUrl);
+			MaxwellContext context = new MaxwellContext(new MaxwellConfig(newMysqlParam));
+			MaxwellKafkaProducer worker = new MaxwellKafkaProducer(context, kafkaProperties, kafkaTopic);
+			
+			//获取所有表名
+			String[] tableNames = utility.getAllTableName(connection,database);
+			
+			for(String tableName:tableNames) {
+				//同步表结构
+				utility.createSqlRun(connection,database,tableName,worker);
+				//同步表数据
+				mysqlParam[5] = tableName;
+				utility.run(mysqlParam);
+			}
 		} catch ( Exception e ) {
 			e.printStackTrace();
 			System.exit(1);
 		} finally {
 			LOGGER.info("done.");
 		}
+		
+	}
+	/**
+	 * 同步表结构
+	 * @param newMysqlParam
+	 * @param database
+	 * @param tableName
+	 * @param kafkaProperties
+	 * @param kafkaTopic
+	 * @throws Exception
+	 */
+	public void createSqlRun(Connection connection,String database,String tableName,MaxwellKafkaProducer worker) throws Exception {
+		String createSql = getShowCreateSql(connection,database,tableName);
+		//根据sql转化为columns
+		TableCreate tt = (TableCreate)SchemaChange.parse(database, createSql).get(0);
+		List<ColumnDef> columns = tt.columns;
+		//设置主键primary-key
+		List<String> pkColumnNames = tt.pks;
+		Table t = new Table();
+		t.setColumnList(columns);
+		t.setPKList(pkColumnNames);
+		t.setCharset("utf8");
+		t.setDatabase(database);
+		t.setTable(tableName);
+		ResolvedTableCreate tableCreate = new ResolvedTableCreate(t);
+		DDLMap r = new DDLMap(tableCreate, System.currentTimeMillis(), createSql, new Position(new BinlogPosition(0L,""),0L), null, null);
+		try {
+			worker.push(r);
+		} catch (Exception e) {
+		}
+	}
+	/**
+	 * 获取所有表名
+	 * @param mysqlParam
+	 * @param database
+	 * @return
+	 */
+	private String[] getAllTableName(Connection connection,String database){
+		List<String> tableNames = new ArrayList<String>();
+		try {
+			String sql = "select table_name from information_schema.tables where table_schema='" + database + "'";
+			PreparedStatement preparedStatement = connection.prepareStatement(sql);
+			ResultSet result = preparedStatement.executeQuery();
+			while(result.next()){
+			    String tableName = result.getString("table_name");
+			    System.out.println(tableName);
+			    tableNames.add(tableName);
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		String[] str = tableNames.toArray(new String[tableNames.size()]);
+		return str;
+	}
+	/**
+	 * 获取建表语句
+	 * @param database
+	 * @param table
+	 * @return
+	 */
+	private String getShowCreateSql(Connection connection,String database, String table){
+		String createSql = "";
+		try {
+			String sql = "show create table " + database + "." + table;
+			PreparedStatement preparedStatement = connection.prepareStatement(sql);
+			ResultSet result = preparedStatement.executeQuery();
+			while(result.next()){
+			    createSql = result.getString("Create Table");
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		return createSql;
+	}
+	/**
+	 * maxwell配置的传入参数格式为--key value
+	 * @param count
+	 * @return
+	 */
+	private String getParam(int count) {
+		StringBuilder sb = new StringBuilder();
+		for(int i=0;i<count;i++) {
+			if(i%2==0) {
+				sb.append("--%s,");
+			}else {
+				sb.append("%s,");
+			}
+		}
+		String s = sb.substring(0, sb.length()-1);
+		return s;
 	}
 }
