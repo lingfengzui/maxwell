@@ -29,8 +29,11 @@ import java.util.Properties;
 
 public class MaxwellBootstrapUtility {
 	static final Logger LOGGER = LoggerFactory.getLogger(MaxwellBootstrapUtility.class);
+
 	protected class MissingBootstrapRowException extends Exception {
-		MissingBootstrapRowException(Long rowID) { super("Could not find bootstrap row with id: " + rowID); }
+		MissingBootstrapRowException(Long rowID) {
+			super("Could not find bootstrap row with id: " + rowID);
+		}
 	}
 
 	private static final long UPDATE_PERIOD_MILLIS = 250;
@@ -44,20 +47,20 @@ public class MaxwellBootstrapUtility {
 	private void run(String[] argv) throws Exception {
 		MaxwellBootstrapUtilityConfig config = new MaxwellBootstrapUtilityConfig(argv);
 
-		if ( config.log_level != null ) {
+		if (config.log_level != null) {
 			Logging.setLevel(config.log_level);
 		}
 
 		ConnectionPool connectionPool = getConnectionPool(config);
-		try ( final Connection connection = connectionPool.getConnection() ) {
-			if ( config.abortBootstrapID != null ) {
+		try (final Connection connection = connectionPool.getConnection()) {
+			if (config.abortBootstrapID != null) {
 				getInsertedRowsCount(connection, config.abortBootstrapID);
 				removeBootstrapRow(connection, config.abortBootstrapID);
 				return;
 			}
 
 			long rowId;
-			if ( config.monitorBootstrapID != null ) {
+			if (config.monitorBootstrapID != null) {
 				getInsertedRowsCount(connection, config.monitorBootstrapID);
 				rowId = config.monitorBootstrapID;
 			} else {
@@ -67,12 +70,12 @@ public class MaxwellBootstrapUtility {
 
 			try {
 				monitorProgress(connection, rowId);
-			} catch ( MissingBootstrapRowException e ) {
+			} catch (MissingBootstrapRowException e) {
 				LOGGER.error("bootstrap aborted.");
 				Runtime.getRuntime().halt(1);
 			}
 
-		} catch ( SQLException e ) {
+		} catch (SQLException e) {
 			LOGGER.error("failed to connect to mysql server @ " + config.getConnectionURI());
 			LOGGER.error(e.getLocalizedMessage());
 			e.printStackTrace();
@@ -90,9 +93,9 @@ public class MaxwellBootstrapUtility {
 		Long startedTimeMillis = null;
 
 		insertedRowsCount = initialRowCount;
-		while ( !isComplete ) {
-			if ( insertedRowsCount < rowCount ) {
-				if ( startedTimeMillis == null && insertedRowsCount > 0 ) {
+		while (!isComplete) {
+			if (insertedRowsCount < rowCount) {
+				if (startedTimeMillis == null && insertedRowsCount > 0) {
 					startedTimeMillis = System.currentTimeMillis();
 				}
 				insertedRowsCount = getInsertedRowsCount(connection, rowId);
@@ -101,7 +104,8 @@ public class MaxwellBootstrapUtility {
 			displayProgress(rowCount, insertedRowsCount, initialRowCount, startedTimeMillis);
 			try {
 				Thread.sleep(UPDATE_PERIOD_MILLIS);
-			} catch ( InterruptedException e) {}
+			} catch (InterruptedException e) {
+			}
 		}
 		displayLine("");
 	}
@@ -110,7 +114,7 @@ public class MaxwellBootstrapUtility {
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			@Override
 			public void run() {
-				if ( !isComplete && console != null ) {
+				if (!isComplete && console != null) {
 					System.out.println("");
 					System.out.println("Exiting monitor.  Bootstrap will continue in the background.");
 					System.out.println("To abort, run maxwell-bootstrap --abort " + rowId);
@@ -126,7 +130,7 @@ public class MaxwellBootstrapUtility {
 		preparedStatement.setLong(1, rowId);
 		ResultSet resultSet = preparedStatement.executeQuery();
 
-		if ( resultSet.next() ) {
+		if (resultSet.next()) {
 			return resultSet.getLong(1);
 		} else {
 			throw new MissingBootstrapRowException(rowId);
@@ -139,7 +143,7 @@ public class MaxwellBootstrapUtility {
 		preparedStatement.setLong(1, rowId);
 		ResultSet resultSet = preparedStatement.executeQuery();
 
-		if ( resultSet.next() )  {
+		if (resultSet.next()) {
 			return resultSet.getInt(1) == 1;
 		} else {
 			throw new MissingBootstrapRowException(rowId);
@@ -159,7 +163,7 @@ public class MaxwellBootstrapUtility {
 	private Long getTotalRowCount(Connection connection, Long bootstrapRowID) throws SQLException, MissingBootstrapRowException {
 		ResultSet resultSet =
 			connection.createStatement().executeQuery("select total_rows from `bootstrap` where id = " + bootstrapRowID);
-		if ( resultSet.next() ) {
+		if (resultSet.next()) {
 			return resultSet.getLong(1);
 		} else {
 			throw new MissingBootstrapRowException(bootstrapRowID);
@@ -169,7 +173,7 @@ public class MaxwellBootstrapUtility {
 	private Long calculateRowCount(Connection connection, String db, String table, String whereClause) throws SQLException {
 		LOGGER.info("counting rows");
 		String sql = String.format("select count(*) from `%s`.%s", db, table);
-		if ( whereClause != null ) {
+		if (whereClause != null) {
 			sql += String.format(" where %s", whereClause);
 		}
 		PreparedStatement preparedStatement = connection.prepareStatement(sql);
@@ -206,36 +210,35 @@ public class MaxwellBootstrapUtility {
 	}
 
 	private void displayProgress(long total, long count, long initialCount, Long startedTimeMillis) {
-		if ( startedTimeMillis == null ) {
+		if (startedTimeMillis == null) {
 			displayLine("waiting for bootstrap to start... ");
-		}
-		else if ( count < total) {
+		} else if (count < total) {
 			long currentTimeMillis = System.currentTimeMillis();
 			long elapsedMillis = currentTimeMillis - startedTimeMillis;
-			long predictedTotalMillis = ( long ) ((elapsedMillis / ( float ) (count - initialCount)) * (total - initialCount));
+			long predictedTotalMillis = (long) ((elapsedMillis / (float) (count - initialCount)) * (total - initialCount));
 			long remainingMillis = predictedTotalMillis - elapsedMillis;
 			String duration = prettyDuration(remainingMillis, elapsedMillis);
-			displayLine(String.format("%d / %d (%.2f%%) %s", count, total, ( count * 100.0 ) / total, duration), count);
+			displayLine(String.format("%d / %d (%.2f%%) %s", count, total, (count * 100.0) / total, duration), count);
 		} else {
 			displayLine("waiting for bootstrap to stop... ");
 		}
 	}
 
 	private String prettyDuration(long millis, long elapsedMillis) {
-		if ( elapsedMillis < DISPLAY_PROGRESS_WARMUP_MILLIS ) {
+		if (elapsedMillis < DISPLAY_PROGRESS_WARMUP_MILLIS) {
 			return "";
 		}
 		long d = (millis / (1000 * 60 * 60 * 24));
 		long h = (millis / (1000 * 60 * 60)) % 24;
 		long m = (millis / (1000 * 60)) % 60;
 		long s = (millis / (1000)) % 60;
-		if ( d > 0 ) {
+		if (d > 0) {
 			return String.format("- %d days %02dh %02dm %02ds remaining ", d, h, m, s);
-		} else if ( h > 0 ) {
+		} else if (h > 0) {
 			return String.format("- %02dh %02dm %02ds remaining ", h, m, s);
-		} else if ( m > 0 ) {
+		} else if (m > 0) {
 			return String.format("- %02dm %02ds remaining ", m, s);
-		} else if ( s > 0 ) {
+		} else if (s > 0) {
 			return String.format("- %02ds remaining ", s);
 		} else {
 			return "";
@@ -243,7 +246,7 @@ public class MaxwellBootstrapUtility {
 	}
 
 	private void displayLine(String line, long count) {
-		if ( console == null && count > 0 && count % NON_CONSOLE_DISPLAY_LINE_COUNT_MULTIPLE == 0 ) {
+		if (console == null && count > 0 && count % NON_CONSOLE_DISPLAY_LINE_COUNT_MULTIPLE == 0) {
 			System.out.println(line);
 		} else {
 			displayLine(line);
@@ -251,7 +254,7 @@ public class MaxwellBootstrapUtility {
 	}
 
 	private void displayLine(String line) {
-		if ( console != null ) {
+		if (console != null) {
 			String ansiClearLine = "\u001b[2K";
 			String ansiMoveCursorToColumnZero = "\u001b[G";
 			System.out.print(ansiClearLine + ansiMoveCursorToColumnZero + line);
@@ -263,99 +266,108 @@ public class MaxwellBootstrapUtility {
 		MaxwellBootstrapUtility utility = new MaxwellBootstrapUtility();
 		try {
 			//配置项
-			String database = "shop";//指定库名
+			String database = "demo";//指定库名
 			String mysqlUrl = "localhost";//mysql地址
 			String mysqlPort = "3306";//mysql端口
 			String mysqlUser = "root";//mysql用户名
-			String mysqlPassword = "root";//mysql密码
+			String mysqlPassword = "123456";//mysql密码
 			String kafkaUrl = "localhost:9092";//kafka地址
 			String kafkaTopic = "maxwell_ddl";//ddl数据存放topic,dml数据存放topic在配置文件里配
-			
+
 			//监控的mysql数据源配置信息,全量同步哪些表,这里只需指定库名
 			String mysqlStr = utility.getParam(6);
-			mysqlStr = String.format(mysqlStr, "database",database,"log_level","debug","table","test");
+			mysqlStr = String.format(mysqlStr, "database", database, "log_level", "debug", "table", "test8");
 			String[] mysqlParam = mysqlStr.split(",");
 			MaxwellBootstrapUtilityConfig config = new MaxwellBootstrapUtilityConfig(mysqlParam);
-			if ( config.log_level != null ) {
+			if (config.log_level != null) {
 				Logging.setLevel(config.log_level);
 			}
 			ConnectionPool connectionPool = utility.getConnectionPool(config);
 			final Connection connection = connectionPool.getConnection();
-			
+
 			//mysql配置
 			String newMysqlStr = utility.getParam(8);
-			newMysqlStr = String.format(newMysqlStr, "host",mysqlUrl,"port",mysqlPort,"user",mysqlUser,"password",mysqlPassword);
+			newMysqlStr = String.format(newMysqlStr, "host", mysqlUrl, "port", mysqlPort, "user", mysqlUser, "password", mysqlPassword);
 			String[] newMysqlParam = newMysqlStr.split(",");
-			
+
 			//kafka配置
 			Properties kafkaProperties = new Properties();
 			kafkaProperties.put("bootstrap.servers", kafkaUrl);
 			MaxwellContext context = new MaxwellContext(new MaxwellConfig(newMysqlParam));
 			MaxwellKafkaProducer worker = new MaxwellKafkaProducer(context, kafkaProperties, kafkaTopic);
-			
-			//获取所有表名
-			String[] tableNames = utility.getAllTableName(connection,database);
-			
-			for(String tableName:tableNames) {
+
+			/**
+			 * 获取所有表名
+			 */
+			String[] tableNames = utility.getAllTableName(connection, database);
+
+			for (String tableName : tableNames) {
 				//同步表结构
-				utility.createSqlRun(connection,database,tableName,worker);
+				utility.createSqlRun(connection, database, tableName, worker);
 				//同步表数据
 				mysqlParam[5] = tableName;
 				utility.run(mysqlParam);
 			}
-		} catch ( Exception e ) {
+		} catch (Exception e) {
 			e.printStackTrace();
 			System.exit(1);
 		} finally {
 			LOGGER.info("done.");
 		}
-		
+
 	}
+
 	/**
 	 * 同步表结构
-	 * @param newMysqlParam
-	 * @param database
-	 * @param tableName
-	 * @param kafkaProperties
-	 * @param kafkaTopic
+	 *
+	 * @param connection 连接
+	 * @param database   数据库
+	 * @param tableName  表名
+	 * @param worker
 	 * @throws Exception
 	 */
-	public void createSqlRun(Connection connection,String database,String tableName,MaxwellKafkaProducer worker) throws Exception {
-		String createSql = getShowCreateSql(connection,database,tableName);
+	public void createSqlRun(Connection connection, String database, String tableName, MaxwellKafkaProducer worker) throws Exception {
+		String createSql = getShowCreateSql(connection, database, tableName);
 		//根据sql转化为columns
-		TableCreate tt = (TableCreate)SchemaChange.parse(database, createSql).get(0);
+		TableCreate tt = (TableCreate) SchemaChange.parse(database, createSql).get(0);
 		List<ColumnDef> columns = tt.columns;
 		//设置主键primary-key
 		List<String> pkColumnNames = tt.pks;
 		Table t = new Table();
 		t.setColumnList(columns);
-		t.setPKList(pkColumnNames);
+		if (null != pkColumnNames) {
+			t.setPKList(pkColumnNames);
+		} else {
+			t.setPKList(new ArrayList<String>());
+		}
 		t.setCharset("utf8");
 		t.setDatabase(database);
 		t.setTable(tableName);
 		ResolvedTableCreate tableCreate = new ResolvedTableCreate(t);
-		DDLMap r = new DDLMap(tableCreate, System.currentTimeMillis(), createSql, new Position(new BinlogPosition(0L,""),0L), null, null);
+		DDLMap r = new DDLMap(tableCreate, System.currentTimeMillis(), createSql, new Position(new BinlogPosition(0L, ""), 0L), null, null);
 		try {
 			worker.push(r);
 		} catch (Exception e) {
 		}
 	}
+
 	/**
 	 * 获取所有表名
-	 * @param mysqlParam
-	 * @param database
-	 * @return
+	 *
+	 * @param connection 数据库连接
+	 * @param database   数据库
+	 * @return 数据库下面所有表名
 	 */
-	private String[] getAllTableName(Connection connection,String database){
+	private String[] getAllTableName(Connection connection, String database) {
 		List<String> tableNames = new ArrayList<String>();
 		try {
 			String sql = "select table_name from information_schema.tables where table_schema='" + database + "'";
 			PreparedStatement preparedStatement = connection.prepareStatement(sql);
 			ResultSet result = preparedStatement.executeQuery();
-			while(result.next()){
-			    String tableName = result.getString("table_name");
-			    System.out.println(tableName);
-			    tableNames.add(tableName);
+			while (result.next()) {
+				String tableName = result.getString("table_name");
+				System.out.println(tableName);
+				tableNames.add(tableName);
 			}
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -363,41 +375,45 @@ public class MaxwellBootstrapUtility {
 		String[] str = tableNames.toArray(new String[tableNames.size()]);
 		return str;
 	}
+
 	/**
 	 * 获取建表语句
+	 *
 	 * @param database
 	 * @param table
 	 * @return
 	 */
-	private String getShowCreateSql(Connection connection,String database, String table){
+	private String getShowCreateSql(Connection connection, String database, String table) {
 		String createSql = "";
 		try {
 			String sql = "show create table " + database + "." + table;
 			PreparedStatement preparedStatement = connection.prepareStatement(sql);
 			ResultSet result = preparedStatement.executeQuery();
-			while(result.next()){
-			    createSql = result.getString("Create Table");
+			while (result.next()) {
+				createSql = result.getString("Create Table");
 			}
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
 		return createSql;
 	}
+
 	/**
 	 * maxwell配置的传入参数格式为--key value
+	 *
 	 * @param count
 	 * @return
 	 */
 	private String getParam(int count) {
 		StringBuilder sb = new StringBuilder();
-		for(int i=0;i<count;i++) {
-			if(i%2==0) {
+		for (int i = 0; i < count; i++) {
+			if (i % 2 == 0) {
 				sb.append("--%s,");
-			}else {
+			} else {
 				sb.append("%s,");
 			}
 		}
-		String s = sb.substring(0, sb.length()-1);
+		String s = sb.substring(0, sb.length() - 1);
 		return s;
 	}
 }
