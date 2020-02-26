@@ -24,6 +24,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
@@ -266,19 +267,9 @@ public class MaxwellBootstrapUtility {
 		MaxwellBootstrapUtility utility = new MaxwellBootstrapUtility();
 		try {
 			//配置项
-			String database = "demo";//指定库名
-			String mysqlUrl = "localhost";//mysql地址
-			String mysqlPort = "3306";//mysql端口
-			String mysqlUser = "root";//mysql用户名
-			String mysqlPassword = "123456";//mysql密码
-			String kafkaUrl = "localhost:9092";//kafka地址
-			String kafkaTopic = "maxwell_ddl";//ddl数据存放topic,dml数据存放topic在配置文件里配
-
-			//监控的mysql数据源配置信息,全量同步哪些表,这里只需指定库名
-			String mysqlStr = utility.getParam(6);
-			mysqlStr = String.format(mysqlStr, "database", database, "log_level", "debug", "table", "test8");
-			String[] mysqlParam = mysqlStr.split(",");
-			MaxwellBootstrapUtilityConfig config = new MaxwellBootstrapUtilityConfig(mysqlParam);
+			//String kafkaUrl = "localhost:9092";
+			//String kafkaTopic = "maxwell_ddl";
+			MaxwellBootstrapUtilityConfig config = new MaxwellBootstrapUtilityConfig(args);
 			if (config.log_level != null) {
 				Logging.setLevel(config.log_level);
 			}
@@ -286,15 +277,16 @@ public class MaxwellBootstrapUtility {
 			final Connection connection = connectionPool.getConnection();
 
 			//mysql配置
-			String newMysqlStr = utility.getParam(8);
-			newMysqlStr = String.format(newMysqlStr, "host", mysqlUrl, "port", mysqlPort, "user", mysqlUser, "password", mysqlPassword);
+			String newMysqlStr = utility.getParam(12);
+			String database = config.databaseName;
+			newMysqlStr = String.format(newMysqlStr, "host", config.mysql.host, "port", config.mysql.port, "user", config.mysql.user, "password", config.mysql.password, "database", database, "table", config.tableName);
 			String[] newMysqlParam = newMysqlStr.split(",");
 
 			//kafka配置
 			Properties kafkaProperties = new Properties();
-			kafkaProperties.put("bootstrap.servers", kafkaUrl);
-			MaxwellContext context = new MaxwellContext(new MaxwellConfig(newMysqlParam));
-			MaxwellKafkaProducer worker = new MaxwellKafkaProducer(context, kafkaProperties, kafkaTopic);
+			kafkaProperties.put("bootstrap.servers", config.kafkaHost+":"+config.kafkaPort);
+			MaxwellContext context = new MaxwellContext(new MaxwellConfig(Arrays.copyOfRange(newMysqlParam,0,8)));
+			MaxwellKafkaProducer worker = new MaxwellKafkaProducer(context, kafkaProperties, config.kafkaTopic);
 
 			/**
 			 * 获取所有表名
@@ -305,8 +297,8 @@ public class MaxwellBootstrapUtility {
 				//同步表结构
 				utility.createSqlRun(connection, database, tableName, worker);
 				//同步表数据
-				mysqlParam[5] = tableName;
-				utility.run(mysqlParam);
+				newMysqlParam[11] = tableName;
+				utility.run(newMysqlParam);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();

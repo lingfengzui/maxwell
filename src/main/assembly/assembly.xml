@@ -11,7 +11,7 @@
       <directory>${project.basedir}</directory>
       <includes>
         <include>bin/*</include>
-        <include>config.properties.example</include>
+        <include>config.properties</include>
         <include>kinesis-producer-library.properties.example</include>
         <include>README*</include>
         <include>LICENSE*</include>

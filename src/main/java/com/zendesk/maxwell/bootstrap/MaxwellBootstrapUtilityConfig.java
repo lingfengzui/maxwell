@@ -26,6 +26,9 @@ public class MaxwellBootstrapUtilityConfig extends AbstractConfig {
 
 	public Long    abortBootstrapID;
 	public Long    monitorBootstrapID;
+	public String kafkaHost;
+	public String kafkaPort;
+	public String kafkaTopic;
 
 	public MaxwellBootstrapUtilityConfig(String argv[]) {
 		this.parse(argv);
@@ -56,6 +59,9 @@ public class MaxwellBootstrapUtilityConfig extends AbstractConfig {
 		parser.accepts( "port", "mysql port. default: 3306" ).withRequiredArg();
 		parser.accepts( "comment", "arbitrary comment to be added to every bootstrap row record" ).withRequiredArg();
 		parser.accepts( "schema_database", "database that contains maxwell schema and state").withRequiredArg();
+		parser.accepts( "kafkaHost", "kafka Host..").withRequiredArg();
+		parser.accepts( "kafkaPort", "kafka Port..").withRequiredArg();
+		parser.accepts( "kafkaTopic", "kafka kafkaTopic..").withRequiredArg();
 		parser.accepts( "help", "display help").forHelp();
 
 		BuiltinHelpFormatter helpFormatter = new BuiltinHelpFormatter(200, 4) {
@@ -143,6 +149,17 @@ public class MaxwellBootstrapUtilityConfig extends AbstractConfig {
 
 		if ( options.has("comment") ) {
 			this.comment = (String) options.valueOf("comment");
+		}
+
+		if ( options.has("kafkaHost") ) {
+			this.kafkaHost = (String) options.valueOf("kafkaHost");
+		}
+
+		if ( options.has("kafkaPort") ) {
+			this.kafkaPort = (String) options.valueOf("kafkaPort");
+		}
+		if ( options.has("kafkaTopic") ) {
+			this.kafkaTopic = (String) options.valueOf("kafkaTopic");
 		}
 	}
 
